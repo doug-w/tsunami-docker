@@ -1,0 +1,347 @@
+diff -Naur ldmud-3.3.719/mudlib/sys/telnet.h ldmud-3.3.719-tsunami/mudlib/sys/telnet.h
+--- ldmud-3.3.719/mudlib/sys/telnet.h	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/mudlib/sys/telnet.h	2018-05-30 01:57:07.872952150 +0000
+@@ -106,6 +106,7 @@
+ #define  TELOPT_STARTTLS      46        /* Transport Layer Security */
+ 
+ /* Inofficial, mud specific telnet options */
++#define  TELOPT_MSSP          70        /* Mud Sound Protocol */
+ #define  TELOPT_COMPRESS      85        /* Mud Compression Protocol, v.1 */
+ #define  TELOPT_COMPRESS2     86        /* Mud Compression Protocol, v.2 */
+ #define  TELOPT_MSP           90        /* Mud Sound Protocol */
+@@ -135,7 +136,7 @@
+    , "TELOPT 56", "TELOPT 57", "TELOPT 58", "TELOPT 59"
+    , "TELOPT 60", "TELOPT 61", "TELOPT 62", "TELOPT 63"
+    , "TELOPT 64", "TELOPT 65", "TELOPT 66", "TELOPT 67"
+-   , "TELOPT 68", "TELOPT 69", "TELOPT 70", "TELOPT 71"
++   , "TELOPT 68", "TELOPT 69", "MSSP", "TELOPT 71"
+    , "TELOPT 72", "TELOPT 73", "TELOPT 74", "TELOPT 75"
+    , "TELOPT 76", "TELOPT 77", "TELOPT 78", "TELOPT 79"
+    , "TELOPT 80", "TELOPT 81", "TELOPT 82", "TELOPT 83"
+diff -Naur ldmud-3.3.719/src/comm.c ldmud-3.3.719-tsunami/src/comm.c
+--- ldmud-3.3.719/src/comm.c	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/comm.c	2018-05-30 01:57:06.436914949 +0000
+@@ -5044,6 +5044,11 @@
+     telopts_will[TELOPT_MSP] = reply_h_telnet_neg;
+     telopts_wont[TELOPT_MSP] = reply_h_telnet_neg;
+ 
++    telopts_do[TELOPT_MSSP] = reply_h_telnet_neg;
++    telopts_dont[TELOPT_MSSP] = reply_h_telnet_neg;
++    telopts_will[TELOPT_MSSP] = reply_h_telnet_neg;
++    telopts_wont[TELOPT_MSSP] = reply_h_telnet_neg;
++
+     telopts_do[TELOPT_MXP] = reply_h_telnet_neg;
+     telopts_dont[TELOPT_MXP] = reply_h_telnet_neg;
+     telopts_will[TELOPT_MXP] = reply_h_telnet_neg;
+diff -Naur ldmud-3.3.719/src/config.h.in ldmud-3.3.719-tsunami/src/config.h.in
+--- ldmud-3.3.719/src/config.h.in	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/config.h.in	2018-05-30 01:57:06.708921995 +0000
+@@ -460,7 +460,9 @@
+  * size limit for the driver process with ulimit & Co.)
+  * Defaults to 3000
+  */
+-#define LD_PCRE_RECURSION_LIMIT    @val_pcre_recursion_limit@
++/* #define LD_PCRE_RECURSION_LIMIT    @val_pcre_recursion_limit@ */
++/* @cdef_pcre_recursion_limit@        LD_PCRE_RECURSION_LIMIT        @val_pcre_recursion_limit@ */
++
+ 
+ /* The maximum length of the buffer for commands. The maximum length of a
+  * command will be MAX_COMMAND_LENGTH - 1.
+@@ -679,4 +681,6 @@
+  */
+ @cdef_dump_gc_refs@ DUMP_GC_REFS
+ 
++#define USE_JSON 1
++#define HAS_JSON 1
+ #endif /* CONFIG_H__ */
+diff -Naur ldmud-3.3.719/src/configure ldmud-3.3.719-tsunami/src/configure
+--- ldmud-3.3.719/src/configure	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719/src/configure	2018-05-30 01:57:06.980929042 +0000
+@@ -9045,7 +9045,7 @@
+   $as_echo_n "(cached) " >&6
+ else
+   ac_check_lib_save_LIBS=$LIBS
+-LIBS="-lm  $LIBS"
++LIBS="-lm -ljson-c $LIBS"
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+
+@@ -9074,7 +9074,7 @@
+ #define HAVE_LIBM 1
+ _ACEOF
+
+-  LIBS="-lm $LIBS"
++  LIBS="-lm -ljson-c $LIBS"
+
+ fi
+
+diff -Naur ldmud-3.3.719/src/func_spec ldmud-3.3.719-tsunami/src/func_spec
+--- ldmud-3.3.719/src/func_spec	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/func_spec	2018-05-30 01:57:06.776923757 +0000
+@@ -763,6 +763,11 @@
+ 
+ #endif /* USE_TLS */
+ 
++#ifdef HAS_JSON
++string	json_serialize(mixed);
++mixed	json_parse(string);
++#endif /* HAS_JSON */
++
+ /* The following functions are optional and can be configured out.
+  */
+ 
+diff -Naur ldmud-3.3.719/src/pkg-mccp.c ldmud-3.3.719-tsunami/src/pkg-mccp.c
+--- ldmud-3.3.719/src/pkg-mccp.c	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/pkg-mccp.c	2018-05-30 01:57:06.488916296 +0000
+@@ -157,10 +157,12 @@
+     
+     ip->compressing = telopt;
+     ip->out_compress = s;
+-    
++
++#if 0    
+     printf("%s MCCP-DEBUG: '%s' mccp started (%d)\n"
+           , time_stamp(), get_txt(ip->ob->name), telopt);
+-    
++#endif
++
+     /* success */
+     return MY_TRUE;
+ } /* start_compress() */
+@@ -205,10 +207,12 @@
+ 
+     /* try to send any residual data */
+     comm_socket_write((char*) buf, len, ip, WB_NONDISCARDABLE);
+-   
++
++#if 0  
+     printf("%s MCCP-DEBUG: '%s' mccp ended\n"
+           , time_stamp(), get_txt(ip->ob->name));
+-    
++#endif
++
+     /* Finished */
+     return retval;
+ } /* end_compress() */
+diff -Naur ldmud-3.3.719/src/prolang.y ldmud-3.3.719-tsunami/src/prolang.y
+--- ldmud-3.3.719/src/prolang.y	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/prolang.y	2018-05-30 01:57:06.820924896 +0000
+@@ -12997,7 +12997,12 @@
+               }
+ 
+               CURRENT_PROGRAM_SIZE--;
+-              last_expression--;
++
++              /* If last_expression lies within the program area
++               * that was moved one bytecode adjust it accordingly.
++               */
++              if(last_expression > $<function_call_head>2.start)
++                  last_expression--;
+           }
+ 
+           argument_level--;
+@@ -13268,6 +13273,12 @@
+               }
+ 
+               CURRENT_PROGRAM_SIZE--;
++
++              /* If last_expression lies within the program area
++               * that was moved one bytecode adjust it accordingly.
++               */
++              if(last_expression > $<function_call_head>4.start)
++                  last_expression--;
+           }
+ 
+           argument_level--;
+diff -Naur ldmud-3.3.719/src/strfuns.c ldmud-3.3.719-tsunami/src/strfuns.c
+--- ldmud-3.3.719/src/strfuns.c	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/strfuns.c	2018-05-30 01:57:06.436914949 +0000
+@@ -1188,5 +1188,147 @@
+     return arg;
+ } /* x_map_string () */
+ 
++#ifdef HAS_JSON
++/* support for javascript object notation
++ * depends on the json-c library
++ * see http://www.json.org for more information
++ */
++#include <json-c/json.h>
++#include "array.h"
++
++svalue_t *
++ldmud_json_inner_parse (svalue_t *sp, struct json_object *val) 
++{
++    if (is_error(val)) {
++	errorf("json_inner_parse: error");
++        /* NOTREACHED */
++        return sp;
++
++    }
++    if (val == NULL) {
++	/* TODO: I (fippo) am not sure, if this is a really good idea... */
++	put_number(sp, 0);
++	return sp;
++    }
++    switch(json_object_get_type(val)) {
++    case json_type_null: 
++	put_number(sp, 0);
++	break;
++    case json_type_boolean:
++	put_number(sp, json_object_get_boolean(val));
++	break;
++    case json_type_double:
++        put_float(sp, json_object_get_double(val));
++	break;
++    case json_type_int:
++	put_number(sp, json_object_get_int(val));
++	break;
++    case json_type_string:
++        put_c_string(sp, json_object_get_string(val));
++	break;
++    case json_type_object:
++      {
++	mapping_t *m;
++	struct lh_entry *e;
++	char *key;
++	struct json_object *newval;
++
++	m = allocate_mapping(json_object_get_object(val)->count, 1); 
++	for (e = json_object_get_object(val)->head; e ? (key = (char*)e->k, newval = (struct json_object *)e->v, e) : 0; e = e->next) {
++	    svalue_t mkey, *mval;
++	    put_c_string(&mkey, key);
++	    mval = get_map_lvalue(m, &mkey);
++	    free_svalue(&mkey);
++	    ldmud_json_inner_parse(mval, newval);
++	}
++	put_mapping(sp, m);
++	break;
++      }
++    case json_type_array:
++      {
++	vector_t *v;
++	struct array_list *a;
++	int size, i;
++	size = json_object_array_length(val);
++	v = allocate_array(size);
++	a = json_object_get_array(val);
++	for (i = 0; i < size; i++) {
++	    ldmud_json_inner_parse(&(v->item[i]), array_list_get_idx(a, i));
++	}
++	put_array(sp, v);
++	break;
++      }
++    }
++    return sp;
++}
++
++svalue_t *
++f_json_parse (svalue_t *sp) {
++    struct json_object *parsed;
++
++    parsed = json_tokener_parse(get_txt(sp->u.str));
++    free_svalue(sp);
++    ldmud_json_inner_parse (sp, parsed);
++    /* TODO: free the object */
++    return sp;
++}
++
++struct json_object *
++ldmud_json_inner_serialize (svalue_t *sp) {
++    struct json_object *val;
++    switch(sp->type) {
++    case T_NUMBER:
++	val = json_object_new_int(sp->u.number);
++	break;
++    case T_STRING:
++	val = json_object_new_string(get_txt(sp->u.str));
++	break;
++    case T_POINTER:
++      {
++	int i;
++	val = json_object_new_array();
++	for (i = VEC_SIZE(sp->u.vec) - 1; i >= 0; i--) 
++	    json_object_array_put_idx(val, i, 
++			ldmud_json_inner_serialize(&sp->u.vec->item[i]));
++	break;
++      }
++    case T_MAPPING:
++      {
++	int i;
++	val = json_object_new_object();
++	for (i = 0; i < MAP_SIZE(sp->u.map); i++) 
++	    walk_mapping(sp->u.map, &ldmud_json_walker, val);
++	break;
++      }
++    case T_FLOAT:
++	val = json_object_new_double(READ_DOUBLE(sp));
++	break;
++    default: /* those are unimplemented */
++	val = json_object_new_object();
++	break; 
++    }
++    return val;
++}
++
++void ldmud_json_walker(svalue_t *key, svalue_t *val, void *parent) 
++{
++    struct json_object *obj = (struct json_object *)parent;
++    if (key->type != T_STRING) 
++	errorf("json only serializes string keys\n");
++	/* NOTREACHED */
++    json_object_object_add(obj, get_txt(key->u.str), 
++			   ldmud_json_inner_serialize(val));
++}
++
++
++svalue_t *
++f_json_serialize (svalue_t *sp) {
++    struct json_object *val;
++    val = ldmud_json_inner_serialize(sp);
++    free_svalue(sp);
++    put_c_string(sp, json_object_to_json_string(val));
++    return sp;
++}
++#endif /* HAS_JSON */
+ /*====================================================================*/
+ 
+diff -Naur ldmud-3.3.719/src/strfuns.h ldmud-3.3.719-tsunami/src/strfuns.h
+--- ldmud-3.3.719/src/strfuns.h	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/strfuns.h	2018-05-30 01:57:06.532917435 +0000
+@@ -41,4 +41,8 @@
+ extern svalue_t * x_map_string (svalue_t *sp, int num_arg);
+ extern svalue_t * x_filter_string (svalue_t *sp, int num_arg);
+ 
++#ifdef USE_JSON
++extern void ldmud_json_walker(svalue_t *key, svalue_t *val, void *parent);
++#endif
++
+ #endif /* STRFUNS_H_ */
+diff -Naur ldmud-3.3.719/src/version.sh ldmud-3.3.719-tsunami/src/version.sh
+--- ldmud-3.3.719/src/version.sh	2009-05-30 11:34:38.000000000 +0000
++++ ldmud-3.3.719-tsunami/src/version.sh	2018-05-30 01:57:06.416914431 +0000
+@@ -2,13 +2,13 @@
+ # version. It is meant to be modified by the bumpversion script.
+ 
+ # The checkin date
+-version_date=$(echo "\$Date$" | sed -e 's/[$]Date: \([0-9]*-[0-9]*-[0-9]*\).*\$/\1/')
++version_date=$(echo "\$Date: 2009-05-30 05:34:38 -0600 (Sat, 30 May 2009) $" | sed -e 's/[$]Date: \([0-9]*-[0-9]*-[0-9]*\).*\$/\1/')
+ 
+ # The checkin time
+-version_time=$(echo "\$Date$" | sed -e 's/[$]Date: \([0-9]*-[0-9]*-[0-9]*\) \([0-9]*:[0-9]*:[0-9]*\).*\$/\2/')
++version_time=$(echo "\$Date: 2009-05-30 05:34:38 -0600 (Sat, 30 May 2009) $" | sed -e 's/[$]Date: \([0-9]*-[0-9]*-[0-9]*\) \([0-9]*:[0-9]*:[0-9]*\).*\$/\2/')
+ 
+ # The checkin revision
+-version_revision=$(echo "\$Revision$" | sed -e 's/[$]Revision: \([0-9][0-9]*\) *\$/\1/')
++version_revision=$(echo "\$Revision: 2618 $" | sed -e 's/[$]Revision: \([0-9][0-9]*\) *\$/\1/')
+ 
+ # The version type: dev, stable, maintenance, release
+ version_type="stable"
+@@ -17,7 +17,7 @@
+ # A timestamp, to be used by bumpversion and other scripts.
+ # It can be used, for example, to 'touch' this file on every build, thus
+ # forcing revision control systems to add it on every checkin automatically.
+-version_stamp="2009-05-30 12:00:00"
++version_stamp="Mon Mar  9 03:35:13 UTC 2015"
+ 
+ # The version number information
+ version_micro=719
