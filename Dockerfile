@@ -13,7 +13,12 @@ RUN apt-get update \
  && rm -rf /ldmud-3.3.719 \
  && apt-get clean \
  && apt-get remove --purge -y build-essential ca-certificates git bison autoconf autogen automake libgcrypt20-dev \
- && apt-get autoremove -y
+ && apt-get autoremove -y \
+ && useradd -r -u 501 tsunami \
+ && mkdir -p /var/run/mysqld \
+ && chown tsunami.tsunami /var/run/mysqld
 
 EXPOSE 2777
 VOLUME /usr/users/lib
+
+USER 501
