@@ -3,7 +3,7 @@ FROM ubuntu:trusty
 ADD tsunami.patch /
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends build-essential ca-certificates curl bison autoconf autogen automake libgcrypt20-dev libmysqlclient-dev libiksemel-dev libssl-dev libjson-c-dev socat \
+ && apt-get install -y --no-install-recommends build-essential ca-certificates curl bison autoconf autogen automake libgcrypt20-dev libmysqlclient-dev libiksemel-dev libssl-dev libjson-c-dev socat supervisor \
  && curl -L https://github.com/ldmud/ldmud/archive/3.3.719.tar.gz | tar -xvzf - \
  && cd /ldmud-3.3.719/src && ./autogen.sh && cd /ldmud-3.3.719 && patch -p1 < /tsunami.patch && cd src \
  && rm /tsunami.patch \
@@ -14,11 +14,22 @@ RUN apt-get update \
  && apt-get clean \
  && apt-get remove --purge -y build-essential ca-certificates git bison autoconf autogen automake libgcrypt20-dev \
  && apt-get autoremove -y \
+ && mkdir -p /var/log/supervisor \
  && useradd -r -u 501 tsunami \
  && mkdir -p /var/run/mysqld \
- && chown tsunami.tsunami /var/run/mysqld
+ && chown tsunami.tsunami /var/run/mysqld /var/log/supervisor
+
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 2777
+
 VOLUME /usr/users/lib
+VOLUME /usr/uesrs/lib/data
+VOLUME /usr/uesrs/lib/www
+VOLUME /usr/uesrs/lib/log
+VOLUME /usr/uesrs/lib/secure/log
 
 USER 501
+
+CMD ["/usr/bin/supervisord"]
+
