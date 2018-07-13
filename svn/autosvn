@@ -1,0 +1,10 @@
+#!/bin/bash 
+
+cd /mud
+# Add Any new directories to svn
+find . -type d | grep -v \.svn | grep -v deleted_chars_data |grep -v svndiffs | grep -v "doxygen" | grep -v TemporaryItems | grep -v DS_Store|xargs svn add --depth=empty 2> /dev/null
+svn status > /tmp/svnstatus
+cat /tmp/svnstatus | grep "^\?" | awk '{print $2}' | egrep "^CA|^doc|^www|scr$|\/\.|\.[chi]$" | grep -v svn-working | grep -v svndiffs | egrep -v "^players.*WWW" | grep -v TemporaryItems | grep -v DS_Stire| grep -v ".dead_ed_files" | sed -e "s/'/\\\'/g" | grep -v ".swp" |grep -v "doxygen" | head -5000 | xargs --max-args=100 svn add
+cat /tmp/svnstatus | grep "^\!" | sed -e 's/! *//' | sed -e 's/ /\\ /g' | sed -e "s/'/\\\'/g" | xargs svn remove --force
+svn --username Tsunami commit -m "autocommit"
+svn update
