@@ -4,6 +4,14 @@ ADD tsunami.patch /
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential ca-certificates curl bison autoconf autogen automake libgcrypt20-dev libmysqlclient-dev libiksemel-dev libssl-dev libjson-c-dev socat supervisor \
+ && rm /usr/sbin/iconvconfig \
+ && curl -L http://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.11.tar.gz | tar -xvzf - \
+ && cd libiconv-1.11 \
+ && ./configure --prefix=/usr/local \
+ && make install \
+ && ldconfig -v \
+ && cd .. \
+ && rm -rf libiconv-1.11 \
  && curl -L https://github.com/ldmud/ldmud/archive/3.3.719.tar.gz | tar -xvzf - \
  && cd /ldmud-3.3.719/src && ./autogen.sh && cd /ldmud-3.3.719 && patch -p1 < /tsunami.patch && cd src \
  && rm /tsunami.patch \
