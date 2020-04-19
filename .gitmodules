@@ -1,0 +1,9 @@
+[submodule "tsunami_node"]
+	path = tsunami_node
+	url = https://bitbucket.org/silashatfield/tsunami_node.git
+[submodule "tsu_wiki"]
+	path = tsu_wiki
+	url = https://bitbucket.org/silashatfield/tsu_wiki.git
+[submodule "tsunamiui"]
+	path = tsunamiui
+	url = https://bitbucket.org/silashatfield/tsunamiui.git

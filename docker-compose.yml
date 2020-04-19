@@ -1,5 +1,141 @@
-version: '3'
+version: '2.2'
+volumes:
+  tsunami_nginx_config:
+    external: true
+  tsunami_www:
+    external: true
+  tsunami_lib:
+    external: true
+  tsunami_node_data:
+    external: true
+  wikidatabase:
+    external: true
+  wikiimages:
+    external: true
+  tsunami_mysql:
+    external: true
+  tsunami_main_log:
+    external: true
+  tsunami_main_secure_log:
+    external: true
+  tsunami_main_data:
+    external: true
+  tsunami_fail2ban_data:
+    external: true
+  tsunami_resilio_config:
+    external: true
+  tsunami_resilio_downloads:
+    external: true
+  tsunami_ui_data:
+    external: true
 services:
+  php:
+    container_name: php
+    image: dougw/nginx
+    restart: always
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+    volumes:
+      - tsunami_www:/var/www/html
+      - tsunami_lib:/mud
+      - tsunami_www:/mud/www
+      - tsunami_www:/www
+  tsunami_nginx:
+    container_name: tsunami_nginx
+    image: linuxserver/letsencrypt
+    restart: always
+    privileged: true
+    volumes:
+      - tsunami_nginx_config:/config
+      - tsunami_www:/var/www/html
+      - tsunami_lib:/mud
+      - tsunami_www:/mud/www
+      - tsunami_www:/www
+    environment:
+       SUBDOMAINS: wildcard
+       EMAIL: dwarren@thebigwave.net
+       URL: thebigwave.net
+       TZ: America/Los_Angeles
+       VALIDATION: dns
+       DNSPLUGIN: route53
+       AWS_CONFIG_FILE: /config/dns-conf/route53.ini
+       PGID: ${PGID}
+       PUID: ${PUID}
+  tsunami_node:
+    container_name: tsunami_node_web_1
+    restart: always
+    volumes:
+      - tsunami_node_data:/data
+    build:
+        context: tsunami_node/.
+        args:
+            - port=8004
+  wikidb:
+    restart: always
+    build: tsu_wiki/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - wikidatabase:/var/lib/mysql
+      - tsunami_www:/var/www/html/extensions/help/www
+  wikiweb:
+    container_name: wiki
+    restart: always
+    build: tsu_wiki
+    volumes:
+      - wikiimages:/var/www/html/images
+    links:
+      - wikidb
+    depends_on:
+      - wikidb
+  mysql:
+    container_name: mysql
+    restart: always
+    image: mysql/mysql-server:5.5.60
+    volumes:
+      - tsunami_mysql:/var/lib/mysql
   tsunami:
+    container_name: tsunami
+    image: dougw/tsunami
     build:
       context: .
+    restart: always
+    volumes:
+      - tsunami_lib:/usr/users/lib
+      - tsunami_www:/usr/users/lib/www
+      - tsunami_main_data:/usr/users/lib/data
+      - tsunami_main_log:/usr/users/lib/log
+      - tsunami_main_secure_log:/usr/users/lib/secure/log
+    depends_on:
+      - mysql
+  client:
+    container_name: tsunami_ui
+    restart: always
+    volumes:
+      - tsunami_ui_data:/data
+    image: spchatfield/tsunamiui_web
+  nfs-server:
+    container_name: tsunami_nfs
+    image: erichough/nfs-server
+    restart: always
+    privileged: true
+    volumes:
+      - tsunami_main_secure_log:/container/log
+    environment:
+      - NFS_EXPORT_0=/container/log                  192.168.0.0/8(ro,no_subtree_check,insecure,async)
+  gmailrelay:
+    container_name: gmailrelay
+    restart: always
+    image: lylescott/postfix-gmail-relay
+    ports:
+      - "225:25/tcp"
+    environment:
+      - SYSTEM_TIMEZONE=America/Los_Angeles
+      - MYNETWORKS=10.0.0.0/8 192.168.0.0/16 172.0.0.0/8
+      - EMAIL=tsunami@thebigwave.net
+      - EMAILPASS=${EMAILPASS}
