@@ -1,4 +1,10 @@
 version: '2.2'
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.57.0/24
 volumes:
   tsunami_nginx_config:
     external: true
