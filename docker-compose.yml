@@ -28,10 +28,6 @@ volumes:
     external: true
   tsunami_fail2ban_data:
     external: true
-  tsunami_resilio_config:
-    external: true
-  tsunami_resilio_downloads:
-    external: true
   tsunami_ui_data:
     external: true
 services:
@@ -47,6 +43,7 @@ services:
       - tsunami_lib:/mud
       - tsunami_www:/mud/www
       - tsunami_www:/www
+
   tsunami_nginx:
     container_name: tsunami_nginx
     image: linuxserver/letsencrypt
@@ -68,6 +65,7 @@ services:
        AWS_CONFIG_FILE: /config/dns-conf/route53.ini
        PGID: ${PGID}
        PUID: ${PUID}
+
   tsunami_node:
     container_name: tsunami_node_web_1
     restart: always
@@ -77,6 +75,7 @@ services:
         context: tsunami_node/.
         args:
             - port=8004
+
   wikidb:
     restart: always
     build: tsu_wiki/mysql
@@ -89,6 +88,7 @@ services:
     volumes:
       - wikidatabase:/var/lib/mysql
       - tsunami_www:/var/www/html/extensions/help/www
+
   wikiweb:
     container_name: wiki
     restart: always
@@ -99,12 +99,14 @@ services:
       - wikidb
     depends_on:
       - wikidb
+
   mysql:
     container_name: mysql
     restart: always
     image: mysql/mysql-server:5.5.60
     volumes:
       - tsunami_mysql:/var/lib/mysql
+
   tsunami:
     container_name: tsunami
     image: dougw/tsunami
@@ -119,21 +121,14 @@ services:
       - tsunami_main_secure_log:/usr/users/lib/secure/log
     depends_on:
       - mysql
+
   client:
     container_name: tsunami_ui
     restart: always
     volumes:
       - tsunami_ui_data:/data
     image: spchatfield/tsunamiui_web
-  nfs-server:
-    container_name: tsunami_nfs
-    image: erichough/nfs-server
-    restart: always
-    privileged: true
-    volumes:
-      - tsunami_main_secure_log:/container/log
-    environment:
-      - NFS_EXPORT_0=/container/log                  192.168.0.0/8(ro,no_subtree_check,insecure,async)
+
   gmailrelay:
     container_name: gmailrelay
     restart: always
