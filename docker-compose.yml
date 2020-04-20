@@ -65,6 +65,9 @@ services:
        AWS_CONFIG_FILE: /config/dns-conf/route53.ini
        PGID: ${PGID}
        PUID: ${PUID}
+    ports:
+      - 80:80
+      - 443:443
 
   tsunami_node:
     container_name: tsunami_node_web_1
@@ -121,6 +124,8 @@ services:
       - tsunami_main_secure_log:/usr/users/lib/secure/log
     depends_on:
       - mysql
+    ports:
+      - 2777:2777
 
   client:
     container_name: tsunami_ui
