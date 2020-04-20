@@ -145,3 +145,16 @@ services:
       - MYNETWORKS=10.0.0.0/8 192.168.0.0/16 172.0.0.0/8
       - EMAIL=tsunami@thebigwave.net
       - EMAILPASS=${EMAILPASS}
+
+  fail2ban:
+    container_name: fail2ban
+    image: crazymax/fail2ban:latest
+    network_mode: "host"
+    cap_add:
+        - NET_ADMIN
+        - NET_RAW
+    volumes:
+        - tsunami_fail2ban_data:/data
+        - /var/log:/var/log:ro
+        - tsunami_main_secure_log:/secure/log:ro
+    restart: always
