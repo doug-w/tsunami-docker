@@ -158,3 +158,12 @@ services:
         - /var/log:/var/log:ro
         - tsunami_main_secure_log:/secure/log:ro
     restart: always
+
+  remote_docker_api:
+    container_name: remote_docker_api
+    image: jarkt/docker-remote-api
+    restart: always
+    ports:
+      - 2375:2375
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
